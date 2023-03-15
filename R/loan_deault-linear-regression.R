@@ -146,8 +146,6 @@ s = sample(1:nrow(loan_data_train_new), 0.7*nrow(loan_data_train_new))
 sample_train = loan_data_train_new[s,]
 sample_test = loan_data_train_new[-s,]
 
-glimpse(sample_train)
-
 # Removing multicollinearity by VIF value.
 
 fit_lm = lm(Interest.Rate~ . -ID, data = sample_train)
@@ -166,4 +164,30 @@ formula(fit_lm)
 fit_lm = lm(Interest.Rate ~ Amount.Requested + Open.CREDIT.Lines + 
               Inquiries.in.the.Last.6.Months + FICO + Loan.Length_36months + 
               State_TX + Home.Ownership_MORTGAGE, data = sample_train)
-summary(fit_lm)
+summary(fit_lm) 
+
+# In summary, observe that Adjusted R-squared is ~0.76. It tells that 76% variability
+# in outcome (that is Interest.Rate) has been explained by this model.
+
+# Below figure will visualize the how close this model predicts Interest.Rate
+
+sample_train %>%
+  mutate(pred_Interest.Rate = predict(fit_lm, newdata = sample_train)) %>%
+  ggplot(aes(x = Interest.Rate, y = pred_Interest.Rate)) + geom_point(alpha = 0.6)
+
+# Check RMSE
+
+rmse = mean((sample_test$Interest.Rate - predict(fit_lm, newdata = sample_test)) ^ 2) %>% 
+  sqrt()
+rmse
+
+# This rmse value (which is ~2.167) can be compare with other model's rmse value
+# to select best model. 
+
+### Final model: Using entire training data
+
+fit_lm_final = lm(Interest.Rate ~ . -ID,
+                  data = loan_data_train_new)
+fit_lm_final = stats::step(fit_lm_final)
+
+summary(fit_lm_final)
