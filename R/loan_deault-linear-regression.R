@@ -17,11 +17,15 @@ names(loan_data_train)
 names(loan_data_test)
 
 # 'Interest.Rate' is the dependent variable. We need predict the Interest.Rate for
-# test data by analysing train data set.
+# test data by analysing (building regression model on) train data set.
 
 ### Data Preparation (Feature Engineering)
 
-# For data manipulation and consistency, two data sets must be combined first. 
+# For data manipulation and maintain consistency for both data sets, two data 
+# sets must be combined first. To do so add Interest.Rate column to test data 
+# set to make columns of both data sets match. And introducing data column to 
+# separate separate both data sets letter on.
+
 loan_data_test$Interest.Rate = NA
 loan_data_test$Data = 'test'
 loan_data_train$Data = 'train'
@@ -30,9 +34,10 @@ loan_data = rbind(loan_data_train, loan_data_test)
 
 glimpse(loan_data)
 
-# Covert data type of these features namely ['Amount.Requested', 'Amount.Funded.By.Investors',
-# 'Interest.Rte', 'Debt.To.Income.Ratio', 'Open.CREDIT.Lines' and 'Revolving.CREDIT.Balance']
-# from Character to Numeric
+# Here observe that, data type of these features namely ['Amount.Requested', 
+# 'Amount.Funded.By.Investors', 'Interest.Rate', 'Debt.To.Income.Ratio', 
+# 'Open.CREDIT.Lines' and 'Revolving.CREDIT.Balance'] recorded as Character data
+# type. Converting those column's data type from Character to Numeric
 
 loan_data = loan_data %>% 
   mutate(Amount.Requested = as.numeric(Amount.Requested),
@@ -43,13 +48,17 @@ loan_data = loan_data %>%
          Revolving.CREDIT.Balance = as.numeric(Revolving.CREDIT.Balance)
          )
 
-# Variable 'Amount.Funded.By,Investors' is recorded after the event, so drop it.
+# The variable 'Amount.Funded.By,Investors' not valid to consider for model 
+# building. Because it is recorded after the decision making, so drop it.
 
 loan_data$Amount.Funded.By.Investors = NULL
 
-# 'FICO.Range' variable represents credit score, but data mentioned in ranges will
-# not be suitable for machine learning modelling. For that reason manipulation the variable
-# by calculating average of two values.
+# Now move on to some complected tasks. The 'FICO.Range' variable represents 
+# credit score, but data mentioned in ranges will not be suitable for machine 
+# learning modelling. For that reason converting the variable into a convenient 
+# format, that is by calculating average of two values.
+
+table(loan_data$FICO.Range)
 
 loan_data = loan_data %>% 
   mutate(f1 = as.numeric(substr(FICO.Range, 1, 3)),
@@ -58,7 +67,7 @@ loan_data = loan_data %>%
          ) %>% 
   select(-FICO.Range, -f1, -f2)
 
-# Variable 'Employment.Length' also need to trim character portion to make it 
+# The variable 'Employment.Length' also need to trim character portion to make it 
 # convenient for machine learning modelling.
 
 table(loan_data$Employment.Length)
@@ -73,9 +82,10 @@ loan_data = loan_data %>%
   select(-Employment.Length)
 
 
-# Manipulating 'Loan.Purpose', creating dummy variables for this will be a good idea
-# but there are more categories with less frequency. To bring down number of categories
-# lets combine the categories with same impact of 'Interest.Rate'.
+# 'Loan.Purpose', here taking a very subjecting move, one can make dummy variable
+# for all possible categories. But in this modelling process considering similar
+# and combining into one group.Creating dummy variables for those combined groups,
+# this helps to bring down number of categories.
 
 table(loan_data$Loan.Purpose)
 
@@ -89,7 +99,10 @@ loan_data = loan_data %>%
          Loan.Purpose.14 = as.numeric(Loan.Purpose %in% c("debt_consolidation","house","moving"))) %>%
   select(-Loan.Purpose)
 
-# create dummy variables for categorical variables
+# Creating dummy variables for other categorical variables namely ["Loan.Length", 
+# "State", "Home.Ownership"], But creating dummy variables for very small frequency
+# categories will lead to perfect multicollinearity problem. For that here considering
+# categories with minimum of 100 observations.
 
 glimpse(loan_data)
 
@@ -133,12 +146,15 @@ for(col in names(loan_data)){
   }
 }
 
-## Data preparation completed, separate train & test data.
+### Data preparation completed, separate train & test data.
 
 loan_data_train_new = loan_data %>% filter(Data == "train") %>% select(-Data)
 loan_data_test_new = loan_data %>% filter(Data == "test") %>% select(-Data, -Interest.Rate)
 
-# Divide train data to check performance of the model.
+# Divide train data into two part (in 70:30 ratio) to build regression model
+# on one data set and check its performance of the other data set. Because
+# directly predicting Interest.Rate on test data set will not help us to 
+# know about model accuracy.
 
 set.seed(21)
 s = sample(1:nrow(loan_data_train_new), 0.7*nrow(loan_data_train_new))
@@ -146,7 +162,9 @@ s = sample(1:nrow(loan_data_train_new), 0.7*nrow(loan_data_train_new))
 sample_train = loan_data_train_new[s,]
 sample_test = loan_data_train_new[-s,]
 
-# Removing multicollinearity by VIF value.
+# Before running running regression model it is important to check whether
+# there any linearly dependent variables present in the data set, they can creat
+# multicollinearity problem in model. It will be checked by VIF value.
 
 fit_lm = lm(Interest.Rate~ . -ID, data = sample_train)
 sort(vif(fit_lm), decreasing = T)[1:3]
@@ -154,7 +172,11 @@ sort(vif(fit_lm), decreasing = T)[1:3]
 fit_lm = lm(Interest.Rate~ . -ID -Loan.Purpose.14, data = sample_train)
 sort(vif(fit_lm), decreasing = T)[1:3]
 
-# Next, using step function removing variables those not statistically signficant.
+# Considering ID column in the model is meaningless, because it is for referential 
+# purpose. The variable 'Loan.Purpose.14' is linearly dependent on other column in
+# the data set.
+
+# Next, using step function removing variables those not statistically significant.
 
 fit_lm = lm(Interest.Rate~ . -ID -Loan.Purpose.14, data = sample_train)
 fit_lm = stats::step(fit_lm)
@@ -186,8 +208,3 @@ rmse
 
 ### Final model: Using entire training data
 
-fit_lm_final = lm(Interest.Rate ~ . -ID,
-                  data = loan_data_train_new)
-fit_lm_final = stats::step(fit_lm_final)
-
-summary(fit_lm_final)
